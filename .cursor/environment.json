@@ -3,7 +3,7 @@
     "dockerfile": "Dockerfile",
     "context": "."
   },
-  "install": "cd front && flutter pub get",
+  "install": "git config --global --add safe.directory /opt/flutter && cd front && flutter pub get",
   "start": "cd front && flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080",
   "ports": [
     {
