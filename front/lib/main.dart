@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'my_memos_page.dart';
+import 'stick_memo_page.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // 카메라 대기하면 iOS Safari에서 흰 화면으로 멈춤 → UI 먼저 띄움
@@ -121,15 +124,41 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     super.dispose();
   }
 
-  void _onTab(int index) {
+  Future<void> _onTab(int index) async {
     setState(() => _tabIndex = index);
-    // ponytail: 아직 화면 전환 없음. 나중에 주변/작성/내메모 연결.
-    final labels = ['주변 메모', '메모 붙이기', '내 메모'];
+
+    if (index == 1) {
+      // 붙이기 → 포스트잇 작성
+      final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const StickMemoPage()),
+      );
+      if (!mounted) return;
+      if (saved == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('메모를 붙였어요'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(milliseconds: 1200),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (index == 2) {
+      // 내메모 목록
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const MyMemosPage()),
+      );
+      return;
+    }
+
+    // 주변: 아직 GPS/서버 없음
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${labels[index]} — 준비 중'),
-        duration: const Duration(milliseconds: 900),
+      const SnackBar(
+        content: Text('주변 메모 — 준비 중'),
+        duration: Duration(milliseconds: 900),
         behavior: SnackBarBehavior.floating,
       ),
     );
