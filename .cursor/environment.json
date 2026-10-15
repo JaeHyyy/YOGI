@@ -4,13 +4,7 @@
     "context": "."
   },
   "install": "cd front && flutter pub get",
-  "terminals": [
-    {
-      "name": "flutter-web",
-      "command": "cd front && flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080",
-      "description": "Flutter web on :8080"
-    }
-  ],
+  "start": "cd front && flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080",
   "ports": [
     {
       "name": "flutter-web",
