@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>현실 공간에 메모를 붙이려면 카메라가 필요해요.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>메모에 사진을 붙이려면 사진 접근이 필요해요.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
