@@ -1,24 +1,16 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 웹/권한 없는 환경에서도 앱은 뜨게 — 카메라는 있으면 쓰고 없으면 플레이스홀더
-  List<CameraDescription> cameras = [];
-  try {
-    cameras = await availableCameras();
-  } catch (_) {
-    cameras = [];
-  }
-
-  runApp(YogiApp(cameras: cameras));
+  // 카메라 대기하면 iOS Safari에서 흰 화면으로 멈춤 → UI 먼저 띄움
+  runApp(const YogiApp());
 }
 
 class YogiApp extends StatelessWidget {
-  const YogiApp({super.key, required this.cameras});
-
-  final List<CameraDescription> cameras;
+  const YogiApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -33,16 +25,14 @@ class YogiApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: CameraHomeScreen(cameras: cameras),
+      home: const CameraHomeScreen(),
     );
   }
 }
 
 /// 앱 첫화면: 카메라 풀스크린 + 하단 포스트잇 메뉴
 class CameraHomeScreen extends StatefulWidget {
-  const CameraHomeScreen({super.key, required this.cameras});
-
-  final List<CameraDescription> cameras;
+  const CameraHomeScreen({super.key});
 
   @override
   State<CameraHomeScreen> createState() => _CameraHomeScreenState();
@@ -51,7 +41,8 @@ class CameraHomeScreen extends StatefulWidget {
 class _CameraHomeScreenState extends State<CameraHomeScreen> {
   CameraController? _controller;
   String? _cameraError;
-  bool _initializing = true;
+  // false로 시작 → 카메라 실패해도 메뉴는 바로 보임
+  bool _initializing = false;
 
   // 하단 탭: 0 주변 / 1 붙이기 / 2 내메모
   int _tabIndex = 0;
@@ -59,33 +50,51 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   @override
   void initState() {
     super.initState();
-    // 상태바를 카메라 위에 얹는 느낌
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
       ),
     );
-    _initCamera();
+    // 다음 프레임 후 카메라 시도 — UI 먼저 그림
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initCamera());
   }
 
   Future<void> _initCamera() async {
-    if (widget.cameras.isEmpty) {
+    // 웹(특히 iOS Safari): 카메라 API가 앱 전체를 죽이거나 멈춤
+    // AR 카메라는 네이티브 앱에서 보고, 웹은 플레이스홀더 + 메뉴만
+    if (kIsWeb) {
+      if (!mounted) return;
       setState(() {
-        _initializing = false;
-        _cameraError = '카메라를 찾을 수 없어요';
+        _cameraError = '웹에서는 카메라 대신 미리보기 화면이에요';
       });
       return;
     }
 
-    final controller = CameraController(
-      widget.cameras.first,
-      ResolutionPreset.high,
-      enableAudio: false,
-    );
+    setState(() => _initializing = true);
 
     try {
-      await controller.initialize();
+      final cameras = await availableCameras().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => <CameraDescription>[],
+      );
+      if (!mounted) return;
+
+      if (cameras.isEmpty) {
+        setState(() {
+          _initializing = false;
+          _cameraError = '카메라를 찾을 수 없어요';
+        });
+        return;
+      }
+
+      final controller = CameraController(
+        cameras.first,
+        ResolutionPreset.high,
+        enableAudio: false,
+      );
+
+      await controller.initialize().timeout(const Duration(seconds: 5));
       if (!mounted) {
         await controller.dispose();
         return;
@@ -93,9 +102,11 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       setState(() {
         _controller = controller;
         _initializing = false;
+        _cameraError = null;
       });
-    } catch (e) {
-      await controller.dispose();
+    } catch (_) {
+      await _controller?.dispose();
+      _controller = null;
       if (!mounted) return;
       setState(() {
         _initializing = false;
@@ -127,14 +138,14 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color(0xFF1B2430),
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1) 카메라 (또는 플레이스홀더)
+          // 1) 카메라 (또는 플레이스홀더) — 실패해도 아래 메뉴는 항상 보임
           _buildCameraLayer(),
 
-          // 2) 위쪽 살짝 그라데이션 — 상태/브랜드만
+          // 2) 위쪽 그라데이션 + 브랜드
           const Positioned(
             top: 0,
             left: 0,
@@ -170,7 +181,7 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
             ),
           ),
 
-          // 3) 하단 포스트잇 메뉴
+          // 3) 하단 포스트잇 메뉴 — 카메라와 무관하게 항상 표시
           Align(
             alignment: Alignment.bottomCenter,
             child: _PostItBottomBar(
@@ -187,8 +198,13 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
     final controller = _controller;
     if (_initializing) {
       return const ColoredBox(
-        color: Colors.black,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        color: Color(0xFF1B2430),
+        child: Center(
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Color(0xFFFFF59D),
+          ),
+        ),
       );
     }
 
@@ -203,12 +219,11 @@ class _CameraHomeScreenState extends State<CameraHomeScreen> {
       );
     }
 
-    // 웹/권한 없을 때 — 카메라 느낌 플레이스홀더
     return _CameraPlaceholder(message: _cameraError);
   }
 }
 
-/// 카메라 없을 때 배경 (웹 터널 확인용)
+/// 카메라 없을 때 배경 (웹/권한 없음)
 class _CameraPlaceholder extends StatelessWidget {
   const _CameraPlaceholder({this.message});
 
@@ -240,6 +255,7 @@ class _CameraPlaceholder extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               message ?? '카메라 미리보기',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),
                 fontSize: 15,
@@ -247,7 +263,7 @@ class _CameraPlaceholder extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '실기기/권한 허용 시 카메라가 켜져요',
+              '앱에서는 카메라가 켜져요',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.45),
                 fontSize: 12,
@@ -293,7 +309,6 @@ class _PostItBottomBar extends StatelessWidget {
                   onTap: () => onTap(0),
                 ),
               ),
-              // 가운데: 포스트잇 "붙이기"
               GestureDetector(
                 onTap: () => onTap(1),
                 child: Transform.rotate(
